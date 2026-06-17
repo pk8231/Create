@@ -20,6 +20,7 @@ COL_STYLE    = 15
 COL_COLOR    = 17
 COL_SIZE     = 18
 COL_QTY      = 19
+COL_PRICE    = 20
 COL_AMOUNT   = 21
 
 # ── 스타일 상수 ───────────────────────────────────────────────
@@ -109,12 +110,16 @@ def aggregate(df: pd.DataFrame) -> dict:
         key      = _make_key(row)
         qty      = _parse_money(row.iloc[COL_QTY])
         amount   = _parse_money(row.iloc[COL_AMOUNT])
+        price    = _parse_money(row.iloc[COL_PRICE])   # 출고단가
         store_nm = str(row.iloc[COL_STORE]).strip()
 
         if key not in result:
-            result[key] = {"매장명": store_nm, "수량": 0, "금액": 0}
+            result[key] = {"매장명": store_nm, "수량": 0, "금액": 0, "단가": price}
         result[key]["수량"] += qty
         result[key]["금액"] += amount
+        # 단가는 0이 아닌 첫 값으로 확정
+        if result[key]["단가"] == 0 and price != 0:
+            result[key]["단가"] = price
 
     return result
 
@@ -150,6 +155,7 @@ def compute_net(out_agg: dict, ret_agg: dict) -> list:
             "size":     size,
             "qty":      net_qty,
             "amount":   net_amt,
+            "price":    out.get("단가", 0),
         })
     return rows
 
@@ -237,6 +243,7 @@ def build_excel(rows: list, last_date: datetime.datetime) -> bytes:
             "Q": r["style"],
             "R": r["color"],
             "S": r["size"],
+            "U": r["price"],
             "W": r["qty"],
             "Z": r["amount"],
         }
@@ -244,8 +251,9 @@ def build_excel(rows: list, last_date: datetime.datetime) -> bytes:
             cell = ws[f"{col_letter}{row_num}"]
             value = vals.get(col_letter)
             _set_cell(cell, value=value,
-                      align="center" if col_letter in ("A","B","R","S","W","Z") else "left")
+                      align="center" if col_letter in ("A","B","R","S","U","W","Z") else "left")
 
+        ws[f"U{row_num}"].number_format = "#,##0"
         ws[f"W{row_num}"].number_format = "#,##0"
         ws[f"Z{row_num}"].number_format = "#,##0"
 
